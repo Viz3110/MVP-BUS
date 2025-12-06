@@ -1,0 +1,148 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// User Model
+model User {
+  id         Int          @id @default(autoincrement())
+  phone      String       @unique
+  bookings   Booking[]
+  searchLogs SearchLog[]  
+}
+
+// Bus Model
+model Bus {
+  id          Int       @id @default(autoincrement())
+  operatorId  Int
+  name        String
+  from        String
+  to          String
+  departure   String
+  arrival     String
+  price       Int
+  seats       Int
+  seatLayout  Json
+  bookings    Booking[]
+
+  operator Operator @relation(fields: [operatorId], references: [id])
+  trips    Trip[]
+}
+
+// Booking model
+model Booking {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  busId     Int
+  tripId    Int                    // ⭐ REQUIRED FIELD
+  seats     String[]
+  price     Int
+  createdAt DateTime @default(now())
+
+  user User   @relation(fields: [userId], references: [id])
+  bus  Bus    @relation(fields: [busId], references: [id])
+  trip Trip   @relation(fields: [tripId], references: [id])
+
+  paymentStatus String  @default("PENDING")
+  paymentMethod String?
+  paymentId     String?
+
+  passengers Passenger[]
+}
+
+// Passenger model
+model Passenger {
+  id        Int    @id @default(autoincrement())
+  bookingId Int
+  name      String
+  gender    String
+  age       Int
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+// Admin model
+model Admin {
+  id        Int     @id @default(autoincrement())
+  username  String  @unique
+  email     String  @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+model SearchLog {
+  id        Int      @id @default(autoincrement())
+  from      String
+  to        String
+  date      String
+  userId    Int?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model Operator {
+  id      Int    @id @default(autoincrement())
+  name    String
+  buses   Bus[]
+}
+
+model Route {
+  id     Int    @id @default(autoincrement())
+  from   String
+  to     String
+
+  stops RouteStop[]
+  trips Trip[]
+}
+
+model RouteStop {
+  id       Int    @id @default(autoincrement())
+  routeId  Int
+  name     String
+  order    Int
+
+  route Route @relation(fields: [routeId], references: [id])
+}
+
+model Trip {
+  id         Int      @id @default(autoincrement())
+  routeId    Int
+  busId      Int
+  date       DateTime
+  price      Int
+  startTime  String
+  endTime    String
+
+  route Route @relation(fields: [routeId], references: [id])
+  bus   Bus   @relation(fields: [busId], references: [id])
+  
+  stops TripStop[]
+  seats TripSeat[]
+
+  bookings Booking[]   // ⭐ ADD THIS LINE
+}
+
+model TripStop {
+  id      Int    @id @default(autoincrement())
+  tripId  Int
+  name    String
+  order   Int
+
+  trip Trip @relation(fields: [tripId], references: [id])
+}
+
+model TripSeat {
+  id      Int    @id @default(autoincrement())
+  tripId  Int
+  seatNo  String
+  booked  Boolean @default(false)
+  lockedByUserId Int?
+  lockedAt       DateTime?
+
+  trip Trip @relation(fields: [tripId], references: [id])
+}
