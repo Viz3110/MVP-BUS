@@ -11,8 +11,12 @@ generator client {
 model User {
   id         Int          @id @default(autoincrement())
   phone      String       @unique
+  email      String?      @unique
+  password   String
+  createdAt  DateTime     @default(now())
+
   bookings   Booking[]
-  searchLogs SearchLog[]  
+  searchLogs SearchLog[]
 }
 
 // Bus Model

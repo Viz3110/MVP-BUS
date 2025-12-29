@@ -5,18 +5,19 @@ import prisma from "../utils/prisma.js";
  */
 export const createBooking = async (req, res) => {
   try {
-    const { userId, tripId, seats, passengers } = req.body;
+    const { userId, tripId, seats, passengers = [] } = req.body;
 
     if (!userId || !tripId || !seats?.length) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    // Fetch trip
     const trip = await prisma.trip.findUnique({
       where: { id: Number(tripId) }
     });
 
-    if (!trip) return res.status(404).json({ success: false, message: "Trip not found" });
+    if (!trip) {
+      return res.status(404).json({ success: false, message: "Trip not found" });
+    }
 
     // Fetch seat records
     const tripSeats = await prisma.tripSeat.findMany({
@@ -25,6 +26,13 @@ export const createBooking = async (req, res) => {
         seatNo: { in: seats }
       }
     });
+
+    if (tripSeats.length !== seats.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid seat selection"
+      });
+    }
 
     const now = new Date();
 
@@ -37,14 +45,16 @@ export const createBooking = async (req, res) => {
         });
       }
 
-      if (seat.lockedByUserId !== userId) {
+      // Lock must belong to user
+      if (seat.lockedByUserId !== Number(userId)) {
         return res.status(400).json({
           success: false,
           message: `Seat ${seat.seatNo} is not locked by you`
         });
       }
 
-      if (now - seat.lockedAt > 5 * 60 * 1000) {
+      // Lock expiry (5 min)
+      if (!seat.lockedAt || now - seat.lockedAt > 5 * 60 * 1000) {
         return res.status(400).json({
           success: false,
           message: `Seat ${seat.seatNo} lock expired`
@@ -52,38 +62,55 @@ export const createBooking = async (req, res) => {
       }
     }
 
-    // PRICE = trip.price × number of seats
     const totalPrice = trip.price * seats.length;
 
-    // Create booking
-const booking = await prisma.booking.create({
-  data: {
-    userId,
-    busId: trip.busId,
-    tripId,
-    seats,
-    price: totalPrice,
-    paymentStatus: "PENDING",
-    paymentMethod: "COD",
+    // ⚠️ TRANSACTION — prevents race-condition double-booking
+    const booking = await prisma.$transaction(async (tx) => {
+      // Re-verify seats still free
+      const conflict = await tx.tripSeat.findMany({
+        where: {
+          tripId: Number(tripId),
+          seatNo: { in: seats },
+          booked: true
+        }
+      });
 
-    passengers: {
-      create: passengers
-    }
-  },
-  include: { passengers: true }
-});
-
-    // Mark seats as permanently booked
-    await prisma.tripSeat.updateMany({
-      where: {
-        tripId: Number(tripId),
-        seatNo: { in: seats }
-      },
-      data: {
-        booked: true,
-        lockedAt: null,
-        lockedByUserId: null
+      if (conflict.length) {
+        throw new Error(`Seat ${conflict[0].seatNo} was just booked`);
       }
+
+      // Create booking
+      const newBooking = await tx.booking.create({
+        data: {
+          userId: Number(userId),
+          busId: trip.busId,
+          tripId: Number(tripId),
+          seats,
+          price: totalPrice,
+          paymentStatus: "PENDING",
+          paymentMethod: "COD",
+
+          passengers: passengers.length
+            ? { create: passengers }
+            : undefined
+        },
+        include: { passengers: true }
+      });
+
+      // Mark seats booked + clear lock
+      await tx.tripSeat.updateMany({
+        where: {
+          tripId: Number(tripId),
+          seatNo: { in: seats }
+        },
+        data: {
+          booked: true,
+          lockedAt: null,
+          lockedByUserId: null
+        }
+      });
+
+      return newBooking;
     });
 
     return res.json({
@@ -94,7 +121,7 @@ const booking = await prisma.booking.create({
 
   } catch (err) {
     console.error("createBooking error:", err);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: err.message || "Server error" });
   }
 };
 
@@ -152,29 +179,21 @@ export const cancelBooking = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await prisma.booking.update({
-  where: { id: booking.id },
-  data: {
-    status: "CANCELLED",
-    paymentStatus: "REFUNDED"
-  }
-});
+    const booking = await prisma.booking.findUnique({
+      where: { id: Number(id) }
+    });
 
     if (!booking)
       return res.status(404).json({ success: false, message: "Booking not found" });
 
-    // Release seats in TripSeat
     await prisma.tripSeat.updateMany({
       where: {
         tripId: booking.tripId,
         seatNo: { in: booking.seats }
       },
-      data: {
-        booked: false
-      }
+      data: { booked: false }
     });
 
-    // Update booking
     const updated = await prisma.booking.update({
       where: { id: booking.id },
       data: {
@@ -203,7 +222,14 @@ export const markBookingPaid = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const booking = await prisma.booking.update({
+    const booking = await prisma.booking.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!booking)
+      return res.status(404).json({ success: false, message: "Booking not found" });
+
+    const updated = await prisma.booking.update({
       where: { id: Number(id) },
       data: {
         paymentStatus: "PAID",
@@ -214,7 +240,7 @@ export const markBookingPaid = async (req, res) => {
     return res.json({
       success: true,
       message: "Payment updated",
-      booking
+      booking: updated
     });
 
   } catch (err) {

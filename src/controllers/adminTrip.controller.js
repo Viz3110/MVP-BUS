@@ -1,6 +1,6 @@
 import prisma from "../utils/prisma.js";
 
-// ================= CREATE TRIP =================
+// ================= CREATE TRIP (ADMIN) =================
 export const createTrip = async (req, res) => {
   try {
     const { busId, date, departureTime, arrivalTime, price } = req.body;
@@ -33,15 +33,15 @@ export const createTrip = async (req, res) => {
   }
 };
 
-// ================= GET ALL TRIPS =================
-export const getTrips = async (req, res) => {
+// ================= GET ALL TRIPS (ADMIN) =================
+export const getAllTrips = async (req, res) => {
   try {
     const trips = await prisma.trip.findMany({
       include: {
         bus: true,
       },
       orderBy: {
-        date: "asc",
+        date: "desc",
       },
     });
 
@@ -51,7 +51,7 @@ export const getTrips = async (req, res) => {
       trips,
     });
   } catch (err) {
-    console.error("getTrips error:", err);
+    console.error("getAllTrips error:", err);
     return res.status(500).json({ success: false });
   }
 };

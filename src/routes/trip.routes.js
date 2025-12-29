@@ -1,18 +1,18 @@
 import { Router } from "express";
 import {
   createTrip,
-  searchTrips,
-  getTripDetails,
-  lockSeats,
-  unlockSeats
+  getTrips,
+  getTripById,
+  updateTrip,
+  deleteTrip,
 } from "../controllers/trip.controller.js";
 
 const router = Router();
 
-router.post("/", createTrip);           // Admin create trip
-router.get("/search", searchTrips);     // User searches trips
-router.get("/:id", getTripDetails);     // Trip details
-router.post("/lock", lockSeats);
-router.post("/unlock", unlockSeats);
+router.post("/", createTrip);
+router.get("/", getTrips);
+router.get("/:id", getTripById);
+router.put("/:id", updateTrip);
+router.delete("/:id", deleteTrip);
 
 export default router;

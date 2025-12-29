@@ -25,3 +25,33 @@ export const searchBuses = async (req, res) => {
     return res.status(500).json({ success: false });
   }
 };
+export const getBusSeats = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const bus = await prisma.bus.findUnique({
+      where: { id: Number(id) },
+      select: {
+        id: true,
+        totalSeats: true,
+        seatLayout: true, // optional
+      },
+    });
+
+    if (!bus) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Bus not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      busId: bus.id,
+      totalSeats: bus.totalSeats,
+      seats: bus.seatLayout || [],
+    });
+  } catch (err) {
+    console.error("getBusSeats error:", err);
+    return res.status(500).json({ success: false });
+  }
+};
