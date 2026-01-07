@@ -15,6 +15,16 @@ export const sendOtp = async (req, res) => {
     let { phone } = req.body;
     phone = normalizePhone(phone);
 
+    // 🔹 Rate-limit check (INSIDE function)
+    const attempts = trackOtpRequest(phone);
+
+    if (attempts > 5) {
+      return res.status(429).json({
+        success: false,
+        message: "Too many OTP attempts, try again later"
+      });
+    }
+
     const otp = generateOtp();
     saveOtp(phone, otp);
 
@@ -28,17 +38,11 @@ export const sendOtp = async (req, res) => {
     });
 
   } catch (err) {
+    console.error("sendOtp error:", err);
     return res.status(500).json({ success: false });
   }
 };
-const limit = trackOtpRequest(phone);
 
-if (limit.blocked) {
-  return res.status(429).json({
-    success: false,
-    message: "Too many OTP requests. Try again later."
-  });
-}
 
 
 // ---------------- VERIFY OTP -----------------
@@ -47,7 +51,6 @@ export const verifyOtpCode = async (req, res) => {
     console.log("VERIFY BODY 👉", req.body);
 
     let { phone, otp } = req.body;
-
     phone = normalizePhone(phone);
     otp = String(otp);
 
@@ -64,7 +67,7 @@ export const verifyOtpCode = async (req, res) => {
         .json({ success: false, message: "Invalid or expired OTP" });
     }
 
-    // 🔹 Reset rate-limit after success
+    // 🔹 Reset rate-limit after successful login
     resetOtpAttempts?.(phone);
 
     let user = await prisma.user.findUnique({
@@ -106,8 +109,6 @@ export const verifyOtpCode = async (req, res) => {
 
   } catch (err) {
     console.error("🔥 verifyOtp error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
