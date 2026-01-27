@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Geobus</string>
+    <string name="title_activity_main">Geobus</string>
+    <string name="package_name">com.geobus.mvp</string>
+    <string name="custom_url_scheme">com.geobus.mvp</string>
+</resources>
