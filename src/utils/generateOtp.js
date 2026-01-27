@@ -1,0 +1,4 @@
+// src/utils/generateOtp.js
+export default function generateOtp() {
+  return Math.floor(100000 + Math.random() * 900000);
+}
